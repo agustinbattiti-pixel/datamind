@@ -152,14 +152,6 @@ function AuthScreen({ onAuth }) {
           className={`w-full py-3 rounded-xl font-semibold text-sm mb-3 ${!loading&&email&&password?"bg-violet-600 hover:bg-violet-700 text-white":"bg-gray-100 text-gray-400"}`}>
           {loading?"Cargando...":(mode==="login"?"Iniciar sesión":"Crear cuenta")}
         </button>
-
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex-1 h-px bg-gray-200"/><span className="text-xs text-gray-400">o</span><div className="flex-1 h-px bg-gray-200"/>
-        </div>
-
-        <button onClick={handleGoogle} className="w-full border border-gray-200 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2">
-          <span>🌐</span> Continuar con Google
-        </button>
       </div>
     </div>
   );

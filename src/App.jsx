@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 
-// ─── FERIADOS ARGENTINA 2025 ──────────────────────────────────
+// ─── FERIADOS ARGENTINA ───────────────────────────────────────
 const FERIADOS_AR = [
+  // 2025
   { date: "2025-01-01", name: "Año Nuevo" },
   { date: "2025-03-03", name: "Carnaval" },
   { date: "2025-03-04", name: "Carnaval" },
@@ -18,10 +19,27 @@ const FERIADOS_AR = [
   { date: "2025-11-20", name: "Soberanía Nacional" },
   { date: "2025-12-08", name: "Inmaculada Concepción" },
   { date: "2025-12-25", name: "Navidad" },
+  // 2026
+  { date: "2026-01-01", name: "Año Nuevo" },
+  { date: "2026-02-16", name: "Carnaval" },
+  { date: "2026-02-17", name: "Carnaval" },
+  { date: "2026-03-24", name: "Día de la Memoria" },
+  { date: "2026-04-02", name: "Malvinas" },
+  { date: "2026-04-03", name: "Viernes Santo" },
+  { date: "2026-05-01", name: "Día del Trabajador" },
+  { date: "2026-05-25", name: "Revolución de Mayo" },
+  { date: "2026-06-15", name: "Día de la Bandera" },
+  { date: "2026-07-09", name: "Independencia" },
+  { date: "2026-08-17", name: "San Martín" },
+  { date: "2026-10-12", name: "Diversidad Cultural" },
+  { date: "2026-11-23", name: "Soberanía Nacional" },
+  { date: "2026-12-08", name: "Inmaculada Concepción" },
+  { date: "2026-12-25", name: "Navidad" },
 ];
 
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DAYS_IN_MONTH = (y,m) => new Date(y, m+1, 0).getDate();
+
 const CAREER_COLORS = [
   { id:"violet", grad:"from-violet-600 to-indigo-700", dot:"bg-violet-500", btn:"bg-violet-600 hover:bg-violet-700", light:"bg-violet-50", badge:"bg-violet-100 text-violet-700", border:"border-violet-200", text:"text-violet-600" },
   { id:"emerald", grad:"from-emerald-600 to-teal-700", dot:"bg-emerald-500", btn:"bg-emerald-600 hover:bg-emerald-700", light:"bg-emerald-50", badge:"bg-emerald-100 text-emerald-700", border:"border-emerald-200", text:"text-emerald-600" },
@@ -94,14 +112,14 @@ function DatePicker({ value, onChange, onClose }) {
   );
 }
 
-// ─── AUTH SCREEN ──────────────────────────────────────────────
-function AuthScreen({ onAuth }) {
+// ─── AUTH ─────────────────────────────────────────────────────
+function AuthScreen() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   const handleSubmit = async () => {
     setError(""); setLoading(true);
@@ -110,9 +128,10 @@ function AuthScreen({ onAuth }) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) setError("Email o contraseña incorrectos");
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
+        if (!fullName.trim()) { setError("Ingresá tu nombre"); setLoading(false); return; }
+        const { data, error } = await supabase.auth.signUp({ email, password, options:{ data:{ full_name: fullName.trim() } } });
         if (error) setError(error.message);
-        else setSuccess("¡Cuenta creada! Revisá tu email para confirmar.");
+        else if (data.user) await supabase.from("profiles").upsert({ id: data.user.id, email, full_name: fullName.trim() });
       }
     } catch(e) { setError("Error inesperado"); }
     setLoading(false);
@@ -130,35 +149,32 @@ function AuthScreen({ onAuth }) {
           <h1 className="text-2xl font-bold text-gray-800">DataMind</h1>
           <p className="text-gray-500 text-sm mt-1">Tu plataforma de estudio inteligente</p>
         </div>
-
         <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
           {[["login","Iniciar sesión"],["register","Registrarse"]].map(([m,l])=>(
-            <button key={m} onClick={()=>setMode(m)} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${mode===m?"bg-white shadow text-gray-800":"text-gray-500"}`}>{l}</button>
+            <button key={m} onClick={()=>{setMode(m);setError("");}} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${mode===m?"bg-white shadow text-gray-800":"text-gray-500"}`}>{l}</button>
           ))}
         </div>
-
         <div className="space-y-3 mb-4">
+          {mode==="register" && (
+            <input type="text" placeholder="Nombre completo" value={fullName} onChange={e=>setFullName(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-400" />
+          )}
           <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-400" />
-          <input type="password" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&handleSubmit()}
+          <input type="password" placeholder="Contraseña" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-400" />
         </div>
-
         {error && <div className="bg-red-50 text-red-600 text-xs px-4 py-2 rounded-xl mb-3">{error}</div>}
-        {success && <div className="bg-green-50 text-green-600 text-xs px-4 py-2 rounded-xl mb-3">{success}</div>}
-
-        <button onClick={handleSubmit} disabled={loading||!email||!password}
-          className={`w-full py-3 rounded-xl font-semibold text-sm mb-3 ${!loading&&email&&password?"bg-violet-600 hover:bg-violet-700 text-white":"bg-gray-100 text-gray-400"}`}>
+        <button onClick={handleSubmit} disabled={loading||!email||!password||(mode==="register"&&!fullName)}
+          className={`w-full py-3 rounded-xl font-semibold text-sm mb-3 ${!loading&&email&&password&&(mode==="login"||fullName)?"bg-violet-600 hover:bg-violet-700 text-white":"bg-gray-100 text-gray-400"}`}>
           {loading?"Cargando...":(mode==="login"?"Iniciar sesión":"Crear cuenta")}
         </button>
-
         <div className="flex items-center gap-3 mb-3">
           <div className="flex-1 h-px bg-gray-200"/><span className="text-xs text-gray-400">o</span><div className="flex-1 h-px bg-gray-200"/>
         </div>
-
         <button onClick={handleGoogle} className="w-full border border-gray-200 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2">
-          <span>🌐</span> Continuar con Google
+          <svg className="w-4 h-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Continuar con Google
         </button>
       </div>
     </div>
@@ -166,7 +182,7 @@ function AuthScreen({ onAuth }) {
 }
 
 // ─── HOME ─────────────────────────────────────────────────────
-function HomeScreen({ onNav, careers, user, displayName }) {
+function HomeScreen({ onNav, careers, displayName }) {
   return (
     <div className="min-h-screen bg-gray-50 pb-20 lg:pb-0">
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 px-6 pt-8 pb-12">
@@ -201,7 +217,7 @@ function HomeScreen({ onNav, careers, user, displayName }) {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            {careers.map(c => {
+            {careers.map(c=>{
               const col = getCol(c.color);
               return (
                 <button key={c.id} onClick={()=>onNav("career",{careerId:c.id})} className="text-left bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
@@ -212,9 +228,7 @@ function HomeScreen({ onNav, careers, user, displayName }) {
                     </div>
                     <span className="text-white/80 text-xl">›</span>
                   </div>
-                  <div className="px-5 py-3">
-                    <p className="text-xs text-gray-500">{c.description||"Sin descripción"}</p>
-                  </div>
+                  <div className="px-5 py-3"><p className="text-xs text-gray-500">{c.description||"Sin descripción"}</p></div>
                 </button>
               );
             })}
@@ -222,7 +236,7 @@ function HomeScreen({ onNav, careers, user, displayName }) {
         )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-          {[["📅","Calendario","Ver eventos y feriados",()=>onNav("calendar")],["📊","Mi Progreso","Ver estadísticas",()=>{}],["👨‍🏫","Profesor IA","Iniciar sesión",()=>{}],["⚙️","Configuración","Preferencias",()=>{}]].map(([icon,label,sub,action])=>(
+          {[["📅","Calendario","Ver eventos",()=>onNav("calendar")],["📊","Mi Progreso","Ver estadísticas",()=>{}],["👨‍🏫","Profesor IA","Iniciar sesión",()=>{}],["⚙️","Configuración","Preferencias",()=>{}]].map(([icon,label,sub,action])=>(
             <Card key={label} className="p-4" onClick={action}>
               <div className="text-2xl mb-2">{icon}</div>
               <div className="text-sm font-semibold text-gray-800">{label}</div>
@@ -246,7 +260,7 @@ function NewCareerScreen({ onBack, onSave }) {
   const handleSave = async () => {
     if (!name.trim()) return;
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data:{user} } = await supabase.auth.getUser();
     const { data, error } = await supabase.from("careers").insert({ user_id:user.id, name:name.trim(), icon, color, description:description.trim() }).select().single();
     if (!error && data) onSave(data);
     setLoading(false);
@@ -264,13 +278,11 @@ function NewCareerScreen({ onBack, onSave }) {
           <input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="ej: Ciencia de Datos"
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-400"/>
         </Card>
-
         <Card className="p-5">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Descripción (opcional)</label>
           <input value={description} onChange={e=>setDescription(e.target.value)} placeholder="ej: Estadística, ML, Python"
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-400"/>
         </Card>
-
         <Card className="p-5">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 block">Ícono</label>
           <div className="grid grid-cols-8 gap-2">
@@ -279,7 +291,6 @@ function NewCareerScreen({ onBack, onSave }) {
             ))}
           </div>
         </Card>
-
         <Card className="p-5">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 block">Color</label>
           <div className="flex gap-3 flex-wrap">
@@ -288,13 +299,10 @@ function NewCareerScreen({ onBack, onSave }) {
             ))}
           </div>
         </Card>
-
-        {/* Preview */}
         <div className={`bg-gradient-to-r ${getCol(color).grad} rounded-2xl px-5 py-4 flex items-center gap-3`}>
           <span className="text-3xl">{icon}</span>
           <div><div className="text-white font-bold">{name||"Nombre de la carrera"}</div><div className="text-white/70 text-xs">{description||"Descripción"}</div></div>
         </div>
-
         <button onClick={handleSave} disabled={!name.trim()||loading}
           className={`w-full py-4 rounded-2xl font-semibold text-base ${name.trim()&&!loading?"bg-violet-600 hover:bg-violet-700 text-white":"bg-gray-100 text-gray-400"}`}>
           {loading?"Guardando...":"Crear carrera"}
@@ -344,7 +352,6 @@ function CareerScreen({ careerId, onNav, onBack, careers, onAddSubject, onDelete
           </div>
         </div>
       </div>
-
       <div className="px-6 -mt-4 max-w-5xl mx-auto">
         {subjects.length===0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 mt-2">
@@ -378,7 +385,6 @@ function CareerScreen({ careerId, onNav, onBack, careers, onAddSubject, onDelete
           </div>
         )}
       </div>
-
       {showModal && (
         <Modal title="Nueva materia" onClose={()=>setShowModal(false)}>
           <div className="space-y-4">
@@ -406,7 +412,7 @@ function CareerScreen({ careerId, onNav, onBack, careers, onAddSubject, onDelete
   );
 }
 
-// ─── SUBJECT ──────────────────────────────────────────────────
+// ─── TP CARD (editable) ───────────────────────────────────────
 function TpCard({ tp, col, onDelete, onUpdate }) {
   const [editing, setEditing] = useState(false);
   const [editFecha, setEditFecha] = useState(false);
@@ -460,7 +466,8 @@ function TpCard({ tp, col, onDelete, onUpdate }) {
   );
 }
 
-function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek, onDeleteWeek, onUpdateWeekStatus, onAddEval }) {
+// ─── SUBJECT ──────────────────────────────────────────────────
+function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek, onDeleteWeek, onUpdateWeekStatus }) {
   const career = careers.find(c=>c.id===careerId);
   const subject = career?.subjects?.find(s=>s.id===subjectId);
   if (!career||!subject) return null;
@@ -478,7 +485,6 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
   const [newTp, setNewTp] = useState({titulo:"",fecha:"",tema:""});
   const [editTpDate, setEditTpDate] = useState(false);
 
-  // CARGAR evaluaciones de la BD al entrar
   useEffect(()=>{
     const load = async () => {
       const { data } = await supabase.from("evaluations").select("*").eq("subject_id",subjectId);
@@ -529,12 +535,9 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
     const [day,month] = date.split("/");
     const year = new Date().getFullYear();
     const fullDate = `${year}-${month}-${day}`;
-
     if (evalIds[key]) {
-      // UPDATE si ya existe
       await supabase.from("evaluations").update({ date:fullDate }).eq("id",evalIds[key]);
     } else {
-      // INSERT si es nuevo
       const { data } = await supabase.from("evaluations").insert({ user_id:user.id, subject_id:subjectId, type:key, title:typeMap[key], date:fullDate }).select().single();
       if (data) setEvalIds(ids=>({...ids,[key]:data.id}));
     }
@@ -638,8 +641,9 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
                   {editEv===key && <DatePicker value={evalDates[key]} onChange={v=>saveEvalDate(key,v)} onClose={()=>setEditEv(null)}/>}
                 </Card>
               ))}
+
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">TPs y Orales</h3>
-              {tps.map((tp,i)=>(
+              {tps.map(tp=>(
                 <TpCard key={tp.id} tp={tp} col={col} onDelete={()=>handleDeleteTp(tp.id)}
                   onUpdate={async (updated)=>{
                     const [day,month] = updated.fecha.split("/");
@@ -676,7 +680,7 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
               <div className={`${col.light} ${col.border} border rounded-2xl p-3 text-xs text-gray-600 flex gap-2`}>
                 <span>💡</span><span>Subí parciales de años anteriores. 3-4 días antes del examen la IA te hará un simulacro.</span>
               </div>
-              <button onClick={()=>onNav("simulacro",{careerId,subjectId})} className={`w-full ${col.btn} text-white rounded-2xl py-4 font-semibold text-sm flex items-center justify-center gap-2`}>🎯 Iniciar Simulacro</button>
+              <button className={`w-full ${col.btn} text-white rounded-2xl py-4 font-semibold text-sm flex items-center justify-center gap-2`}>🎯 Iniciar Simulacro</button>
               <button className="w-full border-2 border-dashed border-gray-200 rounded-2xl py-3 text-sm text-gray-400 hover:border-violet-300 hover:text-violet-500">+ Subir parcial modelo (PDF)</button>
             </div>
           )}
@@ -732,10 +736,10 @@ function WeekScreen({ careerId, subjectId, weekId, onNav, onBack, careers }) {
   };
 
   const addTypes = [
-    {id:"guide",icon:"📋",label:"Guía de lectura",sub:"PDF de la guía semanal"},
-    {id:"youtube",icon:"▶️",label:"Video YouTube",sub:"Pegá la URL del video"},
     {id:"article",icon:"🔗",label:"Artículo / Link",sub:"Link de lectura"},
-    {id:"pdf",icon:"📄",label:"PDF / Apunte",sub:"Material en PDF"},
+    {id:"youtube",icon:"▶️",label:"Video YouTube",sub:"Pegá la URL"},
+    {id:"guide",icon:"📋",label:"Guía de lectura",sub:"PDF de la guía"},
+    {id:"pdf",icon:"📄",label:"Apuntes / PDF",sub:"Material en PDF"},
   ];
 
   return (
@@ -807,14 +811,12 @@ function CalendarScreen({ onBack, careers }) {
   const firstDay = new Date(year,month,1).getDay();
   const offset = firstDay===0?6:firstDay-1;
 
-  // Cargar todas las evaluaciones del usuario
   useEffect(()=>{
     const loadEvals = async () => {
       const { data:{user} } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase.from("evaluations").select("*, subjects(name, career_id, icon)").eq("user_id",user.id);
       if (data) {
-        // enriquecer con el color de la carrera
         const enriched = data.map(ev=>{
           const subject = ev.subjects;
           const career = careers.find(c=>c.id===subject?.career_id);
@@ -827,14 +829,14 @@ function CalendarScreen({ onBack, careers }) {
   },[careers]);
 
   const feriadosDelMes = FERIADOS_AR.filter(f=>{
-    const d = new Date(f.date+"T12:00:00");
-    return d.getMonth()===month && d.getFullYear()===year;
+    const [y,m] = f.date.split("-").map(Number);
+    return (m-1)===month && y===year;
   });
 
   const evalsDelMes = evaluations.filter(ev=>{
     if (!ev.date) return false;
-    const d = new Date(ev.date+"T12:00:00");
-    return d.getMonth()===month && d.getFullYear()===year;
+    const [y,m] = ev.date.split("-").map(Number);
+    return (m-1)===month && y===year;
   }).sort((a,b)=>a.date.localeCompare(b.date));
 
   const getEventsForDay = (day) => {
@@ -843,7 +845,7 @@ function CalendarScreen({ onBack, careers }) {
     const examDay = evaluations.filter(ev=>ev.date===dateStr);
     const hasParcialOrFinal = examDay.some(ev=>["parcial1","parcial2","recuperatorio","final"].includes(ev.type));
     const hasTp = examDay.some(ev=>ev.type==="tp");
-    return { feriado:feriado||null, hasParcialOrFinal, hasTp, examDay };
+    return { feriado:feriado||null, hasParcialOrFinal, hasTp };
   };
 
   const isToday = (day) => {
@@ -932,10 +934,10 @@ function CalendarScreen({ onBack, careers }) {
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">🇦🇷 Feriados</h3>
                 <div className="space-y-2">
                   {feriadosDelMes.map(f=>{
-                    const d = new Date(f.date+"T12:00:00");
+                    const [y,m,d] = f.date.split("-");
                     return (
                       <div key={f.date} className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center text-xs font-bold text-red-600">{d.getDate()}</div>
+                        <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center text-xs font-bold text-red-600">{parseInt(d)}</div>
                         <div className="text-sm text-gray-700">{f.name}</div>
                       </div>
                     );
@@ -944,11 +946,11 @@ function CalendarScreen({ onBack, careers }) {
               </Card>
             )}
 
-            {evalsDelMes.length===0 && (
+            {evalsDelMes.length===0 && feriadosDelMes.length===0 && (
               <Card className="p-4">
                 <div className="text-center py-6">
                   <div className="text-2xl mb-2">🗓</div>
-                  <p className="text-xs text-gray-400">No tenés eventos cargados este mes. Cargá fechas de parciales o TPs en cada materia.</p>
+                  <p className="text-xs text-gray-400">No hay eventos este mes</p>
                 </div>
               </Card>
             )}
@@ -975,7 +977,7 @@ function ProfessorScreen({ careerId, subjectId, weekId, onBack, careers }) {
   const send = () => {
     if (!input.trim()) return;
     const txt = input; setMsgs(m=>[...m,{role:"user",content:txt}]); setInput(""); setLoading(true);
-    setTimeout(()=>{setMsgs(m=>[...m,{role:"assistant",content:"Basándome en tu material de la semana, te explico... (En la versión completa aquí responde Claude con tus PDFs y videos 🤖)",sources:["Tu PDF · pág. 3"]}]);setLoading(false);},1200);
+    setTimeout(()=>{setMsgs(m=>[...m,{role:"assistant",content:"(En la versión completa aquí responde Claude con tus PDFs y videos 🤖)"}]);setLoading(false);},1200);
   };
 
   return (
@@ -987,38 +989,22 @@ function ProfessorScreen({ careerId, subjectId, weekId, onBack, careers }) {
             <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-xl">👨‍🏫</div>
             <div><div className="text-white font-bold text-sm">Profesor IA</div><div className="text-white/60 text-xs">{subject.name} · Semana {week.n||week.number}</div></div>
           </div>
-          <div className="flex gap-2 mb-2 flex-wrap">
-            {[["material","📚 Mi material"],["extended","🌐 Conocimiento extendido"]].map(([id,label])=>(
-              <button key={id} onClick={()=>setMode(id)} className={`text-xs px-3 py-1.5 rounded-full font-medium ${mode===id?"bg-white text-gray-800":"bg-white/20 text-white"}`}>{label}</button>
-            ))}
-          </div>
-          <div className="flex gap-1.5 flex-wrap">
-            {[["clase","🎓 Clase"],["concepto","🔍 Concepto"],["socratico","🧩 Socrático"],["examen","📝 Para examen"]].map(([id,label])=>(
-              <button key={id} onClick={()=>setStyle(id)} className={`text-xs px-2.5 py-1 rounded-full ${style===id?"bg-white/30 text-white font-semibold":"text-white/60"}`}>{label}</button>
-            ))}
-          </div>
         </div>
       </div>
-
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50">
         <div className="max-w-3xl mx-auto space-y-4">
           {msgs.map((msg,i)=>(
             <div key={i} className={`flex ${msg.role==="user"?"justify-end":"justify-start"}`}>
               {msg.role==="assistant"&&<div className="w-7 h-7 bg-violet-100 rounded-full flex items-center justify-center text-sm mr-2 flex-shrink-0 mt-1">👨‍🏫</div>}
-              <div className={`max-w-lg rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role==="user"?`${col.btn} text-white rounded-br-sm`:"bg-white border border-gray-100 shadow-sm text-gray-800 rounded-bl-sm"}`}>
-                {msg.content}
-                {msg.sources&&<div className="mt-2 pt-2 border-t border-gray-100">{msg.sources.map((s,j)=><div key={j} className="text-xs text-gray-400 flex items-center gap-1">📌 {s}</div>)}</div>}
-              </div>
+              <div className={`max-w-lg rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role==="user"?`${col.btn} text-white rounded-br-sm`:"bg-white border border-gray-100 shadow-sm text-gray-800 rounded-bl-sm"}`}>{msg.content}</div>
             </div>
           ))}
           {loading&&<div className="flex"><div className="w-7 h-7 bg-violet-100 rounded-full flex items-center justify-center text-sm mr-2">👨‍🏫</div><div className="bg-white border border-gray-100 shadow-sm rounded-2xl px-4 py-3 flex gap-1">{[0,1,2].map(i=><div key={i} className={`w-2 h-2 ${col.dot} rounded-full animate-bounce`} style={{animationDelay:`${i*0.15}s`}}/>)}</div></div>}
         </div>
       </div>
-
       <div className="px-6 py-3 bg-white border-t border-gray-100 flex-shrink-0">
         <div className="max-w-3xl mx-auto flex gap-2 items-center">
-          <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Preguntale al Profesor IA..."
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-violet-400"/>
+          <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Preguntale al Profesor IA..." className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-violet-400"/>
           <button onClick={send} className={`${col.btn} text-white w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0`}>➤</button>
         </div>
       </div>
@@ -1074,7 +1060,7 @@ export default function App() {
 
   const onNav = (to,p={}) => { setScreen(to); setParams(p); window.scrollTo(0,0); };
   const back = () => {
-    const map = { career:["home",{}], newCareer:["home",{}], subject:["career",{careerId:params.careerId}], week:["subject",params], professor:["week",params], simulacro:["subject",params], calendar:["home",{}] };
+    const map = { career:["home",{}], newCareer:["home",{}], subject:["career",{careerId:params.careerId}], week:["subject",params], professor:["week",params], calendar:["home",{}] };
     const [s,p] = map[screen]||["home",{}]; onNav(s,p);
   };
 
@@ -1090,23 +1076,21 @@ export default function App() {
   if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="text-white text-center"><div className="text-4xl mb-3">🧠</div><p className="text-slate-400">Cargando DataMind...</p></div></div>;
   if (!user) return <AuthScreen/>;
 
-  const commonProps = { careers, onNav, onBack:back };
   const displayName = profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0];
+  const commonProps = { careers, onNav, onBack:back };
 
   const screens = {
-    home: <HomeScreen {...commonProps} user={user} displayName={displayName}/>,
+    home: <HomeScreen {...commonProps} displayName={displayName}/>,
     newCareer: <NewCareerScreen onBack={back} onSave={onAddCareer}/>,
     career: <CareerScreen {...commonProps} {...params} onAddSubject={onAddSubject} onDeleteSubject={onDeleteSubject}/>,
     subject: <SubjectScreen {...commonProps} {...params} onAddWeek={onAddWeek} onDeleteWeek={onDeleteWeek} onUpdateWeekStatus={onUpdateWeekStatus}/>,
     week: <WeekScreen {...commonProps} {...params}/>,
     professor: <ProfessorScreen {...commonProps} {...params}/>,
-    simulacro: <div className="p-8 text-center text-gray-500">Simulacro próximamente</div>,
     calendar: <CalendarScreen {...commonProps}/>,
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navbar desktop */}
       <nav className="hidden lg:flex items-center justify-between px-8 py-3 bg-white border-b border-gray-100 sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-2 cursor-pointer" onClick={()=>onNav("home")}><span className="text-xl">🧠</span><span className="font-bold text-gray-800">DataMind</span></div>
         <div className="flex items-center gap-4">
@@ -1117,10 +1101,9 @@ export default function App() {
         </div>
       </nav>
 
-      {screens[screen]||<HomeScreen {...commonProps} user={user}/>}
+      {screens[screen]||<HomeScreen {...commonProps} displayName={displayName}/>}
 
-      {/* Bottom nav mobile */}
-      {!["professor","simulacro"].includes(screen)&&(
+      {!["professor"].includes(screen)&&(
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex z-20">
           {[["🏠","Inicio","home"],["📅","Calendario","calendar"],["📊","Progreso","home"],["👤","Salir",null]].map(([icon,label,s])=>(
             <button key={label} onClick={()=>s?onNav(s):handleSignOut()} className={`flex-1 py-3 flex flex-col items-center gap-0.5 ${screen===s?"text-violet-600":"text-gray-400"}`}>

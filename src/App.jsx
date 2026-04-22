@@ -407,6 +407,59 @@ function CareerScreen({ careerId, onNav, onBack, careers, onAddSubject, onDelete
 }
 
 // ─── SUBJECT ──────────────────────────────────────────────────
+function TpCard({ tp, col, onDelete, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [editFecha, setEditFecha] = useState(false);
+  const [form, setForm] = useState({ titulo:tp.titulo, fecha:tp.fecha, tema:tp.tema });
+
+  const save = () => {
+    if (!form.titulo.trim()) return;
+    onUpdate(form);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <Card className="px-4 py-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-3">Editar TP / Oral</h4>
+        <div className="space-y-2">
+          <input type="text" placeholder="Título" value={form.titulo} onChange={e=>setForm(f=>({...f,titulo:e.target.value}))}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-violet-400"/>
+          <input type="text" placeholder="Tema específico" value={form.tema} onChange={e=>setForm(f=>({...f,tema:e.target.value}))}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-violet-400"/>
+          <button onClick={()=>setEditFecha(!editFecha)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-left text-gray-700">
+            📅 {form.fecha||"Seleccionar fecha"}
+          </button>
+          {editFecha && <DatePicker value={form.fecha} onChange={v=>{setForm(f=>({...f,fecha:v}));setEditFecha(false);}} onClose={()=>setEditFecha(false)}/>}
+          <div className="flex gap-2 pt-1">
+            <button onClick={()=>{setEditing(false);setForm({titulo:tp.titulo,fecha:tp.fecha,tema:tp.tema});}} className="flex-1 border border-gray-200 text-gray-500 rounded-lg py-2 text-sm">Cancelar</button>
+            <button onClick={save} className={`flex-1 ${col.btn} text-white rounded-lg py-2 text-sm font-medium`}>Guardar</button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="px-4 py-3">
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          <span className="text-lg">📁</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-gray-800 truncate">{tp.titulo}</div>
+            <div className="text-xs text-gray-500">📅 {tp.fecha}</div>
+            {tp.tema && <div className="text-xs text-gray-400 truncate">Tema: {tp.tema}</div>}
+          </div>
+        </div>
+        <div className="flex gap-1 flex-shrink-0">
+          <button onClick={()=>setEditing(true)} className={`text-xs ${col.badge} px-2 py-1 rounded-lg font-medium`}>Editar</button>
+          <button onClick={onDelete} className="text-xs text-red-400 px-2 py-1 hover:bg-red-50 rounded-lg">✕</button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek, onDeleteWeek, onUpdateWeekStatus, onAddEval }) {
   const career = careers.find(c=>c.id===careerId);
   const subject = career?.subjects?.find(s=>s.id===subjectId);
@@ -587,19 +640,13 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
               ))}
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">TPs y Orales</h3>
               {tps.map((tp,i)=>(
-                <Card key={tp.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-2">
-                      <span className="text-lg">📁</span>
-                      <div>
-                        <div className="text-sm font-semibold text-gray-800">{tp.titulo}</div>
-                        <div className="text-xs text-gray-500">📅 {tp.fecha}</div>
-                        <div className="text-xs text-gray-400">Tema: {tp.tema}</div>
-                      </div>
-                    </div>
-                    <button onClick={()=>handleDeleteTp(tp.id)} className="text-xs text-red-400 px-2 py-1">✕</button>
-                  </div>
-                </Card>
+                <TpCard key={tp.id} tp={tp} col={col} onDelete={()=>handleDeleteTp(tp.id)}
+                  onUpdate={async (updated)=>{
+                    const [day,month] = updated.fecha.split("/");
+                    const year = new Date().getFullYear();
+                    await supabase.from("evaluations").update({ title:updated.titulo, topic:updated.tema, date:`${year}-${month}-${day}` }).eq("id",tp.id);
+                    setTps(ts=>ts.map(x=>x.id===tp.id?{...x,...updated}:x));
+                  }}/>
               ))}
               {showAddTp?(
                 <Card className="px-4 py-4">
@@ -755,25 +802,57 @@ function CalendarScreen({ onBack, careers }) {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
+  const [evaluations, setEvaluations] = useState([]);
   const days = DAYS_IN_MONTH(year,month);
   const firstDay = new Date(year,month,1).getDay();
   const offset = firstDay===0?6:firstDay-1;
+
+  // Cargar todas las evaluaciones del usuario
+  useEffect(()=>{
+    const loadEvals = async () => {
+      const { data:{user} } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("evaluations").select("*, subjects(name, career_id, icon)").eq("user_id",user.id);
+      if (data) {
+        // enriquecer con el color de la carrera
+        const enriched = data.map(ev=>{
+          const subject = ev.subjects;
+          const career = careers.find(c=>c.id===subject?.career_id);
+          return { ...ev, subject_name:subject?.name, subject_icon:subject?.icon, career_color:career?.color||"violet", career_name:career?.name };
+        });
+        setEvaluations(enriched);
+      }
+    };
+    loadEvals();
+  },[careers]);
 
   const feriadosDelMes = FERIADOS_AR.filter(f=>{
     const d = new Date(f.date+"T12:00:00");
     return d.getMonth()===month && d.getFullYear()===year;
   });
 
+  const evalsDelMes = evaluations.filter(ev=>{
+    if (!ev.date) return false;
+    const d = new Date(ev.date+"T12:00:00");
+    return d.getMonth()===month && d.getFullYear()===year;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+
   const getEventsForDay = (day) => {
     const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
     const feriado = FERIADOS_AR.find(f=>f.date===dateStr);
-    return { feriado: feriado||null };
+    const examDay = evaluations.filter(ev=>ev.date===dateStr);
+    const hasParcialOrFinal = examDay.some(ev=>["parcial1","parcial2","recuperatorio","final"].includes(ev.type));
+    const hasTp = examDay.some(ev=>ev.type==="tp");
+    return { feriado:feriado||null, hasParcialOrFinal, hasTp, examDay };
   };
 
   const isToday = (day) => {
     const t = new Date();
     return t.getDate()===day && t.getMonth()===month && t.getFullYear()===year;
   };
+
+  const typeEmoji = (type) => ({parcial1:"📝",parcial2:"📝",recuperatorio:"🔄",final:"🏁",tp:"📁"}[type]||"📌");
+  const typeLabel = (type) => ({parcial1:"Parcial 1",parcial2:"Parcial 2",recuperatorio:"Recuperatorio",final:"Final",tp:"TP / Oral"}[type]||type);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 lg:pb-8">
@@ -801,13 +880,17 @@ function CalendarScreen({ onBack, careers }) {
               <div className="grid grid-cols-7 gap-1">
                 {Array.from({length:offset}).map((_,i)=><div key={"e"+i}/>)}
                 {Array.from({length:days},(_,i)=>i+1).map(d=>{
-                  const {feriado} = getEventsForDay(d);
+                  const {feriado, hasParcialOrFinal, hasTp} = getEventsForDay(d);
                   const today = isToday(d);
                   return (
-                    <div key={d} className={`aspect-square rounded-xl flex flex-col items-center justify-center relative cursor-pointer transition-colors
-                      ${today?"bg-violet-600 text-white":feriado?"bg-red-50 text-red-600":"hover:bg-gray-50 text-gray-700"}`}>
-                      <span className={`text-xs font-medium ${today?"text-white":""}`}>{d}</span>
-                      {feriado&&!today&&<div className="w-1 h-1 bg-red-400 rounded-full mt-0.5"/>}
+                    <div key={d} className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-colors
+                      ${today?"bg-violet-600 text-white":feriado?"bg-red-50 text-red-600":hasParcialOrFinal?"bg-amber-50 text-amber-700":hasTp?"bg-blue-50 text-blue-700":"hover:bg-gray-50 text-gray-700"}`}>
+                      <span className="text-xs font-medium">{d}</span>
+                      <div className="flex gap-0.5 mt-0.5">
+                        {feriado&&!today&&<div className="w-1 h-1 bg-red-400 rounded-full"/>}
+                        {hasParcialOrFinal&&!today&&<div className="w-1 h-1 bg-amber-500 rounded-full"/>}
+                        {hasTp&&!today&&<div className="w-1 h-1 bg-blue-500 rounded-full"/>}
+                      </div>
                     </div>
                   );
                 })}
@@ -817,12 +900,33 @@ function CalendarScreen({ onBack, careers }) {
             <div className="flex gap-3 text-xs text-gray-500 mb-4 flex-wrap">
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-violet-600 rounded-full"/><span>Hoy</span></div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-red-100 border border-red-300 rounded-full"/><span>Feriado</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-amber-400 rounded-full"/><span>Examen</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-blue-400 rounded-full"/><span>TP/Oral</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-amber-100 border border-amber-400 rounded-full"/><span>Examen</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-blue-100 border border-blue-400 rounded-full"/><span>TP/Oral</span></div>
             </div>
           </div>
 
           <div className="space-y-3">
+            {evalsDelMes.length>0 && (
+              <Card className="p-4">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">📝 Tus eventos del mes</h3>
+                <div className="space-y-2">
+                  {evalsDelMes.map(ev=>{
+                    const [y,m,d] = ev.date.split("-");
+                    const col = getCol(ev.career_color);
+                    return (
+                      <div key={ev.id} className="flex items-center gap-2">
+                        <div className={`w-8 h-8 ${col.light} rounded-lg flex items-center justify-center text-xs font-bold ${col.text}`}>{parseInt(d)}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-gray-700 truncate">{typeEmoji(ev.type)} {typeLabel(ev.type)} — {ev.subject_name}</div>
+                          {ev.topic && <div className="text-xs text-gray-400 truncate">{ev.topic}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
             {feriadosDelMes.length>0&&(
               <Card className="p-4">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">🇦🇷 Feriados</h3>
@@ -840,13 +944,14 @@ function CalendarScreen({ onBack, careers }) {
               </Card>
             )}
 
-            <Card className="p-4">
-              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">📝 Próximos eventos</h3>
-              <div className="text-center py-6">
-                <div className="text-2xl mb-2">🗓</div>
-                <p className="text-xs text-gray-400">Cargá fechas de exámenes en cada materia para verlos acá</p>
-              </div>
-            </Card>
+            {evalsDelMes.length===0 && (
+              <Card className="p-4">
+                <div className="text-center py-6">
+                  <div className="text-2xl mb-2">🗓</div>
+                  <p className="text-xs text-gray-400">No tenés eventos cargados este mes. Cargá fechas de parciales o TPs en cada materia.</p>
+                </div>
+              </Card>
+            )}
           </div>
         </div>
       </div>

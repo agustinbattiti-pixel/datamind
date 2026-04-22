@@ -419,10 +419,36 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
   const [loading, setLoading] = useState(false);
   const [editEv, setEditEv] = useState(null);
   const [evalDates, setEvalDates] = useState({parcial1:"",parcial2:"",recuperatorio:"",final:""});
+  const [evalIds, setEvalIds] = useState({});
   const [tps, setTps] = useState([]);
   const [showAddTp, setShowAddTp] = useState(false);
   const [newTp, setNewTp] = useState({titulo:"",fecha:"",tema:""});
   const [editTpDate, setEditTpDate] = useState(false);
+
+  // CARGAR evaluaciones de la BD al entrar
+  useEffect(()=>{
+    const load = async () => {
+      const { data } = await supabase.from("evaluations").select("*").eq("subject_id",subjectId);
+      if (!data) return;
+      const dates = {parcial1:"",parcial2:"",recuperatorio:"",final:""};
+      const ids = {};
+      const tpList = [];
+      data.forEach(ev => {
+        if (ev.date) {
+          const [y,m,d] = ev.date.split("-");
+          const formatted = `${d}/${m}`;
+          if (["parcial1","parcial2","recuperatorio","final"].includes(ev.type)) {
+            dates[ev.type] = formatted;
+            ids[ev.type] = ev.id;
+          } else if (ev.type === "tp") {
+            tpList.push({ id: ev.id, titulo: ev.title, fecha: formatted, tema: ev.topic||"" });
+          }
+        }
+      });
+      setEvalDates(dates); setEvalIds(ids); setTps(tpList);
+    };
+    load();
+  },[subjectId]);
 
   const handleAddWeek = async () => {
     if (!newTitle.trim()) return;
@@ -445,12 +471,21 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
   };
 
   const saveEvalDate = async (key, date) => {
-    setEvalDates(d=>({...d,[key]:date}));
     const { data:{user} } = await supabase.auth.getUser();
     const typeMap = {parcial1:"Parcial 1",parcial2:"Parcial 2",recuperatorio:"Recuperatorio",final:"Final"};
     const [day,month] = date.split("/");
-    const fullDate = `2025-${month}-${day}`;
-    await supabase.from("evaluations").insert({ user_id:user.id, subject_id:subjectId, type:key, title:typeMap[key], date:fullDate });
+    const year = new Date().getFullYear();
+    const fullDate = `${year}-${month}-${day}`;
+
+    if (evalIds[key]) {
+      // UPDATE si ya existe
+      await supabase.from("evaluations").update({ date:fullDate }).eq("id",evalIds[key]);
+    } else {
+      // INSERT si es nuevo
+      const { data } = await supabase.from("evaluations").insert({ user_id:user.id, subject_id:subjectId, type:key, title:typeMap[key], date:fullDate }).select().single();
+      if (data) setEvalIds(ids=>({...ids,[key]:data.id}));
+    }
+    setEvalDates(d=>({...d,[key]:date}));
     setEditEv(null);
   };
 
@@ -458,9 +493,15 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
     if (!newTp.titulo.trim()) return;
     const { data:{user} } = await supabase.auth.getUser();
     const [day,month] = (newTp.fecha||"01/01").split("/");
-    await supabase.from("evaluations").insert({ user_id:user.id, subject_id:subjectId, type:"tp", title:newTp.titulo, date:`2025-${month}-${day}`, topic:newTp.tema });
-    setTps(t=>[...t,{...newTp,id:Date.now()}]);
+    const year = new Date().getFullYear();
+    const { data } = await supabase.from("evaluations").insert({ user_id:user.id, subject_id:subjectId, type:"tp", title:newTp.titulo, date:`${year}-${month}-${day}`, topic:newTp.tema }).select().single();
+    if (data) setTps(t=>[...t,{id:data.id,titulo:newTp.titulo,fecha:newTp.fecha,tema:newTp.tema}]);
     setNewTp({titulo:"",fecha:"",tema:""}); setShowAddTp(false);
+  };
+
+  const handleDeleteTp = async (id) => {
+    await supabase.from("evaluations").delete().eq("id",id);
+    setTps(t=>t.filter(x=>x.id!==id));
   };
 
   return (
@@ -556,7 +597,7 @@ function SubjectScreen({ careerId, subjectId, onNav, onBack, careers, onAddWeek,
                         <div className="text-xs text-gray-400">Tema: {tp.tema}</div>
                       </div>
                     </div>
-                    <button onClick={()=>setTps(t=>t.filter((_,j)=>j!==i))} className="text-xs text-red-400 px-2 py-1">✕</button>
+                    <button onClick={()=>handleDeleteTp(tp.id)} className="text-xs text-red-400 px-2 py-1">✕</button>
                   </div>
                 </Card>
               ))}

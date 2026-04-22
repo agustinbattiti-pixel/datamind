@@ -152,22 +152,30 @@ function AuthScreen({ onAuth }) {
           className={`w-full py-3 rounded-xl font-semibold text-sm mb-3 ${!loading&&email&&password?"bg-violet-600 hover:bg-violet-700 text-white":"bg-gray-100 text-gray-400"}`}>
           {loading?"Cargando...":(mode==="login"?"Iniciar sesión":"Crear cuenta")}
         </button>
+
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex-1 h-px bg-gray-200"/><span className="text-xs text-gray-400">o</span><div className="flex-1 h-px bg-gray-200"/>
+        </div>
+
+        <button onClick={handleGoogle} className="w-full border border-gray-200 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2">
+          <span>🌐</span> Continuar con Google
+        </button>
       </div>
     </div>
   );
 }
 
 // ─── HOME ─────────────────────────────────────────────────────
-function HomeScreen({ onNav, careers, user }) {
+function HomeScreen({ onNav, careers, user, displayName }) {
   return (
     <div className="min-h-screen bg-gray-50 pb-20 lg:pb-0">
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 px-6 pt-8 pb-12">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2"><span className="text-2xl">🧠</span><span className="text-white text-xl font-bold">DataMind</span></div>
-            <div className="text-white/60 text-xs">👤 {user?.email?.split("@")[0]}</div>
+            <div className="text-white/60 text-xs">👤 {displayName}</div>
           </div>
-          <p className="text-slate-400 text-sm">Tu plataforma de estudio inteligente</p>
+          <p className="text-slate-400 text-sm">Hola {displayName?.split(" ")[0]}, ¿qué estudiamos hoy?</p>
           <div className="mt-5 grid grid-cols-3 gap-3 max-w-sm">
             {[[String(careers.length),"Carreras"],[String(careers.reduce((a,c)=>a+(c.subjects?.length||0),0)),"Materias"],["0","Sesiones IA"]].map(([v,l])=>(
               <div key={l} className="bg-white/10 rounded-xl p-3 text-center">
@@ -875,6 +883,7 @@ function ProfessorScreen({ careerId, subjectId, weekId, onBack, careers }) {
 // ─── APP ──────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [screen, setScreen] = useState("home");
   const [params, setParams] = useState({});
@@ -884,6 +893,20 @@ export default function App() {
     supabase.auth.getSession().then(({data:{session}})=>{ setUser(session?.user||null); setAuthLoading(false); });
     supabase.auth.onAuthStateChange((_,session)=>{ setUser(session?.user||null); });
   },[]);
+
+  useEffect(()=>{
+    if (!user) return;
+    const loadProfile = async () => {
+      let { data } = await supabase.from("profiles").select("*").eq("id",user.id).maybeSingle();
+      if (!data) {
+        const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0];
+        const { data:created } = await supabase.from("profiles").upsert({ id:user.id, email:user.email, full_name:fullName }).select().single();
+        data = created;
+      }
+      setProfile(data);
+    };
+    loadProfile();
+  },[user]);
 
   useEffect(()=>{
     if (!user) return;
@@ -919,12 +942,13 @@ export default function App() {
   const handleSignOut = async () => { await supabase.auth.signOut(); setUser(null); setCareers([]); setScreen("home"); };
 
   if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="text-white text-center"><div className="text-4xl mb-3">🧠</div><p className="text-slate-400">Cargando DataMind...</p></div></div>;
-  if (!user) return <AuthScreen onAuth={setUser}/>;
+  if (!user) return <AuthScreen/>;
 
   const commonProps = { careers, onNav, onBack:back };
+  const displayName = profile?.full_name || user.user_metadata?.full_name || user.email?.split("@")[0];
 
   const screens = {
-    home: <HomeScreen {...commonProps} user={user}/>,
+    home: <HomeScreen {...commonProps} user={user} displayName={displayName}/>,
     newCareer: <NewCareerScreen onBack={back} onSave={onAddCareer}/>,
     career: <CareerScreen {...commonProps} {...params} onAddSubject={onAddSubject} onDeleteSubject={onDeleteSubject}/>,
     subject: <SubjectScreen {...commonProps} {...params} onAddWeek={onAddWeek} onDeleteWeek={onDeleteWeek} onUpdateWeekStatus={onUpdateWeekStatus}/>,
